@@ -221,6 +221,8 @@ config.ini
 secrets.json
 .secrets
 
+.claude
+
 # AI/ML specific
 *.h5
 *.pkl

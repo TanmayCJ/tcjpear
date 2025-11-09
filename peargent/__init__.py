@@ -12,11 +12,11 @@ load_dotenv()
 from .core.agent import Agent
 from .core.tool import Tool
 from .tools import get_tool_by_name
-from peargent.core.router import RouterResult
+from peargent.core.router import RouterResult, RoutingAgent
 from .core.stopping import limit_steps, StepLimitCondition
 from .core.pool import Pool
 
-def create_agent(name: str, description: str, persona: str, model, tools=None, stop = None):
+def create_agent(name: str, description: str, persona: str, model=None, tools=None, stop = None):
     parsed_tools = []
     for t in tools or []:
         if isinstance(t, str):
@@ -39,3 +39,6 @@ def create_pool(agents, default_model=None, router=None, max_iter=5, default_sta
         max_iter=max_iter,
         default_state=default_state or State()
     )
+    
+def create_routing_agent(name: str, model, persona: str, agents: list):
+    return RoutingAgent(name=name, model=model, persona=persona, agents=agents)

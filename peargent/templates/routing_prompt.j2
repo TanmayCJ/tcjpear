@@ -1,0 +1,41 @@
+{{ persona }}
+
+=== AVAILABLE AGENTS ===
+{% for agent_info in agent_details %}
+Agent: {{ agent_info.name }}
+Role: {{ agent_info.description }}
+Tools: {{ agent_info.tools|join(', ') if agent_info.tools else 'None' }}
+---
+{% endfor %}
+
+=== CONVERSATION HISTORY ===
+{% for message in history %}
+{% if message.agent %}[{{ message.agent }}] {% endif %}{{ message.role|capitalize }}: {{ message.content }}
+{% endfor %}
+
+=== ROUTING DECISION ===
+{% if last_agent %}
+Last agent that executed: {{ last_agent }}
+{% endif %}
+
+Your task is to analyze the conversation and determine which agent should act next.
+
+Decision Guidelines:
+1. CRITICAL: Look at which tools have been used - if an agent already completed their task (used their tool successfully), move to the NEXT agent in the workflow
+2. Identify what still needs to be done to complete the user's request
+3. Match the required next step to the agent with the most relevant tools and expertise
+4. NEVER route to the same agent twice in a row - each agent should act exactly once unless there's an error
+5. Follow the natural workflow progression - don't go backwards unless something failed
+6. Choose 'STOP' only when all required steps are complete and the user has a final formatted result
+
+Workflow Analysis:
+- What was the user's original goal?
+- Which agents have already completed their work? (check tool usage markers)
+- What is the NEXT logical step in the pipeline?
+- Has the final formatting/reporting been done?
+
+Common Workflow Pattern:
+Data Collection → Analysis → Formatting/Reporting → STOP
+
+Respond with ONLY the agent name ({{ agents|join(', ') }}) or 'STOP'.
+Do not include any explanation or additional text.
