@@ -43,6 +43,15 @@ try:
 except ImportError:
     SQLiteHistoryStore = None
 
+# Observability imports
+from .observability import (
+    enable_tracing,
+    configure_tracing,
+    get_tracer,
+    InMemoryTracingStore,
+    FileTracingStore,
+)
+
 # Define what gets imported with "from peargent import *"
 __all__ = [
     'create_agent',
@@ -70,7 +79,13 @@ __all__ = [
     'FileHistoryStore',
     'Thread',
     'Message',
-    'HistoryConfig'
+    'HistoryConfig',
+    # Observability
+    'enable_tracing',
+    'configure_tracing',
+    'get_tracer',
+    'InMemoryTracingStore',
+    'FileTracingStore',
 ]
 
 # Add SQL stores to __all__ if available
@@ -79,7 +94,10 @@ if PostgreSQLHistoryStore:
 if SQLiteHistoryStore:
     __all__.append('SQLiteHistoryStore')
 
-def create_agent(name: str, description: str, persona: str, model=None, tools=None, stop=None, history=None, auto_manage_context: bool = False, max_context_messages: int = 20):
+# Sentinel value to detect if tracing was explicitly passed
+_TRACING_NOT_SET = object()
+
+def create_agent(name: str, description: str, persona: str, model=None, tools=None, stop=None, history=None, tracing=_TRACING_NOT_SET):
     """
     Create an agent with optional persistent history.
 
@@ -91,8 +109,7 @@ def create_agent(name: str, description: str, persona: str, model=None, tools=No
         tools: List of tool names (str) or Tool objects
         stop: Stop condition
         history: Optional ConversationHistory, HistoryConfig, or None for persistent conversation storage
-        auto_manage_context: Automatically manage context window size (default: False) - deprecated, use HistoryConfig
-        max_context_messages: Maximum messages before auto-management triggers (default: 20) - deprecated, use HistoryConfig
+        tracing: Enable tracing for this agent (default: False, but can be overridden by pool)
 
     Returns:
         Agent instance
@@ -112,7 +129,10 @@ def create_agent(name: str, description: str, persona: str, model=None, tools=No
                 store=File(storage_dir="./conversations")
             )
         )
-        
+
+        # With tracing enabled
+        agent = create_agent(..., tracing=True)
+
         # Legacy approach (still supported)
         history = create_history(File(storage_dir="./conversations"))
         agent = create_agent(..., history=history, auto_manage_context=True)
@@ -126,35 +146,37 @@ def create_agent(name: str, description: str, persona: str, model=None, tools=No
         else:
             raise ValueError("Tools must be instances of the Tool class.")
 
+    # Determine if tracing was explicitly set
+    tracing_explicitly_set = tracing is not _TRACING_NOT_SET
+    actual_tracing = False if tracing is _TRACING_NOT_SET else tracing
+
     # Handle HistoryConfig
     if isinstance(history, HistoryConfig):
         config = history
         actual_history = config.create_history()
         return Agent(
-            name=name, 
-            description=description, 
-            persona=persona, 
-            model=model, 
-            tools=parsed_tools, 
-            stop=stop, 
+            name=name,
+            description=description,
+            persona=persona,
+            model=model,
+            tools=parsed_tools,
+            stop=stop,
             history=actual_history,
-            auto_manage_context=config.auto_manage_context,
-            max_context_messages=config.max_context_messages,
-            context_strategy=config.strategy,
-            summarize_model=config.summarize_model
+            tracing=actual_tracing,
+            _tracing_explicitly_set=tracing_explicitly_set
         )
-    
+
     # Legacy behavior
     return Agent(
-        name=name, 
-        description=description, 
-        persona=persona, 
-        model=model, 
-        tools=parsed_tools, 
-        stop=stop, 
+        name=name,
+        description=description,
+        persona=persona,
+        model=model,
+        tools=parsed_tools,
+        stop=stop,
         history=history,
-        auto_manage_context=auto_manage_context,
-        max_context_messages=max_context_messages
+        tracing=actual_tracing,
+        _tracing_explicitly_set=tracing_explicitly_set
     )
 
 def create_tool(name: str, description: str, input_parameters: dict, call_function):
@@ -172,7 +194,7 @@ def create_tool(name: str, description: str, input_parameters: dict, call_functi
     """
     return Tool(name=name, description=description, input_parameters=input_parameters, call_function=call_function)
 
-def create_pool(agents, default_model=None, router=None, max_iter=5, default_state=None, history=None):
+def create_pool(agents, default_model=None, router=None, max_iter=5, default_state=None, history=None, tracing=False):
     """
     Create a pool of agents with optional persistent history.
 
@@ -183,6 +205,8 @@ def create_pool(agents, default_model=None, router=None, max_iter=5, default_sta
         max_iter: Maximum number of agent executions
         default_state: Optional State instance
         history: Optional ConversationHistory, HistoryConfig, or None for persistent conversation storage
+        tracing: Enable tracing for all agents in the pool (default: False).
+                 Individual agents with explicit tracing=False will not be overridden.
 
     Returns:
         Pool instance
@@ -198,6 +222,17 @@ def create_pool(agents, default_model=None, router=None, max_iter=5, default_sta
                 store=SessionBuffer()
             )
         )
+
+        # Enable tracing for all agents in pool
+        pool = create_pool(
+            agents=[agent1, agent2, agent3],
+            tracing=True
+        )
+
+        # Mix: pool tracing enabled, but one agent explicitly opts out
+        agent1 = create_agent(..., tracing=False)  # Will stay False
+        agent2 = create_agent(...)  # Will become True from pool
+        pool = create_pool(agents=[agent1, agent2], tracing=True)
     """
     # Handle HistoryConfig
     actual_history = None
@@ -212,7 +247,8 @@ def create_pool(agents, default_model=None, router=None, max_iter=5, default_sta
         router=router or round_robin_router([agent.name for agent in agents]),
         max_iter=max_iter,
         default_state=default_state or State(),
-        history=actual_history
+        history=actual_history,
+        tracing=tracing
     )
 
 def create_routing_agent(name: str, model, persona: str, agents: list):

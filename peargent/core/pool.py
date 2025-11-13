@@ -37,11 +37,20 @@ class Pool:
         max_iter: int = 5,
         default_state: Optional[State] = None,
         history: Optional["ConversationHistory"] = None,
+        tracing: bool = False,
     ):
         # Assign default model to agents that don't have one
         for agent in agents:
             if agent.model is None and default_model is not None:
                 agent.model = default_model
+
+        # Enable tracing for all agents if tracing=True, unless agent explicitly has tracing set
+        if tracing:
+            for agent in agents:
+                # Only set tracing if the agent doesn't have an explicit tracing value
+                # Check if _tracing_explicitly_set exists and is False (not explicitly set)
+                if not getattr(agent, '_tracing_explicitly_set', False):
+                    agent.tracing = True
 
         self.agents_dict: Dict[str, any] = {a.name: a for a in agents}
         self.agents_names = list(self.agents_dict.keys())
@@ -49,6 +58,7 @@ class Pool:
         self.router = router or (lambda state, call_count, last: RouterResult(None))
         self.max_iter = max_iter
         self.history = history
+        self.tracing = tracing
 
         # Create state with history manager if provided
         if default_state:

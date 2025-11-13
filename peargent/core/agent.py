@@ -13,6 +13,8 @@ from typing import Optional, Dict, List, Any
 from jinja2 import Environment, FileSystemLoader
 from peargent.core.stopping import limit_steps
 from peargent.core.history import ConversationHistory
+from peargent.observability.cost_tracker import get_cost_tracker
+from peargent.observability import get_tracer, SpanType
 
 
 class Agent:
@@ -33,7 +35,7 @@ class Agent:
         context_strategy (str): Strategy for context management ("smart", "trim_last", "trim_first", "summarize")
         summarize_model: Model to use for summarization (falls back to main model if not provided)
     """
-    def __init__(self, name, model, persona, description, tools, stop=None, history: Optional[ConversationHistory] = None, auto_manage_context: bool = False, max_context_messages: int = 20, context_strategy: str = "smart", summarize_model=None):
+    def __init__(self, name, model, persona, description, tools, stop=None, history: Optional[ConversationHistory] = None, auto_manage_context: bool = False, max_context_messages: int = 20, context_strategy: str = "smart", summarize_model=None, tracing: bool = False, _tracing_explicitly_set: bool = False):
         self.name = name
         self.model = model
         self.persona = persona
@@ -45,6 +47,8 @@ class Agent:
         self.max_context_messages = max_context_messages
         self.context_strategy = context_strategy
         self.summarize_model = summarize_model
+        self.tracing = tracing
+        self._tracing_explicitly_set = _tracing_explicitly_set
 
         self.tool_schemas = [
             {
@@ -176,6 +180,24 @@ class Agent:
             str: The agent's final response
         """
         self.temporary_memory = []
+        
+        # Trace initialize
+        trace = None
+        tracer = get_tracer() if self.tracing else None
+        if tracer and tracer.enabled:
+            # Get session and user context if available
+            from peargent.observability import get_session_id, get_user_id
+            session_id = get_session_id()
+            user_id = get_user_id()
+
+            trace_id = tracer.start_trace(
+                agent_name=self.name,
+                input_data=input_data,
+                session_id=session_id,
+                user_id=user_id
+            )
+            trace = tracer.get_trace(trace_id)
+        
 
         # Ensure a thread exists if using history
         if self.history and not self.history.current_thread_id:
@@ -211,8 +233,31 @@ class Agent:
             while True:
                 # Increment step counter
                 step += 1
+                
+                #Tracing LLM call span
+                if tracer and tracer.enabled:
+                    with tracer.trace_llm_call(f"LLM Call (step {step})") as span:
+                        response = self.model.generate(prompt)
 
-                response = self.model.generate(prompt)
+                        # Track tokens and cost
+                        if span:
+                            cost_tracker = get_cost_tracker()
+                            # Try to get model_name from the model object
+                            model_name = getattr(self.model, 'model_name', None) or getattr(self.model, 'model', 'unknown')
+                            try:
+                                prompt_tokens, completion_tokens, cost = cost_tracker.count_and_calculate(
+                                    prompt=prompt,
+                                    completion=response,
+                                    model=model_name
+                                )
+                                span.set_llm_data(prompt=prompt, response=response, model=model_name)
+                                span.set_tokens(prompt_tokens, completion_tokens, cost)
+                            except Exception:
+                                # If token counting fails, still set the data without tokens
+                                span.set_llm_data(prompt=prompt, response=response, model=model_name)
+                else:
+                    response = self.model.generate(prompt)
+              # ===== END TRACING =====
 
                 self._add_to_memory("assistant", response)
 
@@ -224,7 +269,13 @@ class Agent:
                     if tool_name not in self.tools:
                         raise ValueError(f"Tool '{tool_name}' not found in agent's toolset.")
 
-                    tool_output = self.tools[tool_name].run(args)
+                    if tracer and tracer.enabled:
+                        with tracer.trace_tool_execution(tool_name, args) as span:
+                            tool_output = self.tools[tool_name].run(args)
+                            if span:
+                                span.set_tool_data(tool_name=tool_name, args=args, output=tool_output)
+                    else:
+                        tool_output = self.tools[tool_name].run(args)
 
                     # Store tool result in a structured way
                     self._add_to_memory("tool", {
@@ -237,6 +288,10 @@ class Agent:
                         # Instead of returning generic message, return tool result
                         result = f"Tool result: {tool_output}"
                         self._sync_to_history()
+
+                        if tracer and tracer.enabled and trace:
+                            tracer.end_trace(trace.trace_id, output=result)
+
                         return result
 
                     # Build follow-up prompt with full memory context and separate tool result
@@ -261,17 +316,33 @@ class Agent:
                         if item['role'] == 'tool':
                             result = f"Based on the analysis: {item['content']['output']}"
                             self._sync_to_history()
+
+                            if tracer and tracer.enabled and trace:
+                                tracer.end_trace(trace.trace_id, output=result)
+
                             return result
                     result = "Task completed with available information."
                     self._sync_to_history()
+
+                    if tracer and tracer.enabled and trace:
+                        tracer.end_trace(trace.trace_id, output=result)
+
                     return result
 
                 # No tool call, return final answer
                 self._sync_to_history()
+
+                if tracer and tracer.enabled and trace:
+                    tracer.end_trace(trace.trace_id, output=response)
+
                 return response
         except Exception as e:
             # Sync history even on error
             self._sync_to_history()
+            
+            if tracer and tracer.enabled and trace:
+                tracer.end_trace(trace.trace_id, error=e)
+                
             raise e
 
     def _parse_tool_call(self, llm_output: str) -> Optional[Dict[str, Any]]:
