@@ -15,11 +15,13 @@ class State:
     def __init__(
         self,
         data: Optional[Dict[str, Any]] = None,
-        history_manager: Optional["ConversationHistory"] = None
+        history_manager: Optional["ConversationHistory"] = None,
+        agents: Optional[Dict[str, Any]] = None
     ):
         self.kv: Dict[str, Any] = data or {}
         self.history: List[Dict[str, Any]] = []
         self.history_manager = history_manager
+        self.agents: Dict[str, Any] = agents or {}
 
     def add_message(self, role: str, content: str, agent: Optional[str] = None):
         """

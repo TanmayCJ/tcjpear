@@ -13,11 +13,11 @@ class StorageType:
     pass
 
 
-class SessionBuffer(StorageType):
-    """Configuration for in-memory session buffer storage."""
+class InMemory(StorageType):
+    """Configuration for in-memory storage."""
 
     def __init__(self):
-        """Initialize session buffer storage configuration (no parameters needed)."""
+        """Initialize in-memory storage configuration (no parameters needed)."""
         pass
 
 

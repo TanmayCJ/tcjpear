@@ -66,8 +66,11 @@ class Pool:
             # Update state's history manager if not already set
             if history and not self.state.history_manager:
                 self.state.history_manager = history
+            # Update state's agents if not already set
+            if not self.state.agents:
+                self.state.agents = self.agents_dict
         else:
-            self.state = State(history_manager=history)
+            self.state = State(history_manager=history, agents=self.agents_dict)
 
         # If router is a RoutingAgent, provide it with agent objects for better context
         if hasattr(self.router, "agent_objects"):

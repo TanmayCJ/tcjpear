@@ -46,6 +46,7 @@ print(response)
 * Refer **<u>[History](/docs/history)</u>** to learn how to setup conversation memory for agents.
 * Refer **<u>[Pool](/docs/pool)</u>** to learn how to create a pool of agents.
 
+
 ## How does agent work?
 
 <div className='fd-steps [&_h3]:fd-step'>
@@ -77,10 +78,16 @@ The agent checks whether it should stop (stop conditions met or max iterations r
 | Parameter | Type | Description | Required |
 | :--- | :--- | :--- | :--- |
 | `name` | `str` | The name of the agent. | Yes |
+| `description` | `str` | A brief description of the agent's purpose. Required when using in a **<u>Pool</u>**. | No* |
 | `persona` | `str` | The system prompt defining the agent's personality and instructions. | Yes |
-| `model` | `Model` | The LLM model instance (e.g., `openai("gpt-4")`). **<u>Available models</u>**| Yes |
-| `description` | `str` | A brief description of the agent's purpose. | No* |
+| `model` | `Model` | The LLM model instance (e.g., `openai("gpt-4")`). | Yes |
+| `tools` | `list[Tool]` | A list of **<u>tools</u>** the agent can access. | No |
+| `stop` | `StopCondition` | Condition that determines when the agent should stop iterating (default: `limit_steps(5)`). | No |
+| `history` | `HistoryConfig` | Configuration for conversation **<u>history</u>**. | No |
+| `tracing` | `bool \| None` | Enable/disable tracing. `None` (default) inherits from global tracer if `enable_tracing()` was called, `True` explicitly enables, `False` opts out. | No |
+| `output_schema` | `Type[BaseModel]` | Pydantic model for structured output validation. | No |
+| `max_retries` | `int` | Maximum retries for `output_schema` validation (default: `3`). Only used when `output_schema` is provided. | No |
 
 \* Required when using the agent in a **<u>Pool</u>**.
 
-For advanced configuration like `stop`, `tracing`, `output_schema`, and `max_retries`, refer to **<u>[Advanced Features](/docs/agents#advanced-features)</u>**.
+To know more about `stop`, `tracing`, `output_schema`, and `max_retries`, refer to **<u>[Advanced Features](/docs/agents#advanced-features)</u>**.

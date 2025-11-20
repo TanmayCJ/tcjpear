@@ -12,6 +12,11 @@
     "---Core Concepts---",
     "agents",
     "tools",
-    "pools"
+    "pools",
+    "routers",
+    "states",
+    "history",
+    "models",
+    "long_term_memory"
   ]
 }

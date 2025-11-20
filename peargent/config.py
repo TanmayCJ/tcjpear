@@ -5,7 +5,7 @@ This module provides configuration classes for agents and history management.
 """
 
 from typing import Optional, Union, Any
-from peargent.core.history import ConversationHistory, StorageType, SessionBuffer
+from peargent.core.history import ConversationHistory, StorageType, InMemory, HistoryStore
 
 
 class HistoryConfig:
@@ -55,7 +55,7 @@ class HistoryConfig:
         max_context_messages: int = 20,
         strategy: str = "smart",
         summarize_model: Optional[Any] = None,
-        store: Union[StorageType, ConversationHistory, None] = None
+        store: Union[StorageType, ConversationHistory, HistoryStore, None] = None
     ):
         """
         Initialize history configuration.
@@ -71,11 +71,12 @@ class HistoryConfig:
                      - "summarize": Summarize old messages (requires LLM)
             summarize_model: Optional LLM model for summarization (only needed for "summarize" strategy)
                            If not provided and strategy needs it, agent's model will be used
-            store: Storage backend configuration or existing ConversationHistory instance
+            store: Storage backend configuration or existing history instance
                   Can be:
-                  - StorageType instance: SessionBuffer(), File(), Sqlite(), Postgresql(), Redis()
+                  - StorageType instance: InMemory(), File(), Sqlite(), Postgresql(), Redis()
+                  - HistoryStore instance: Custom storage backend (e.g., CustomHistoryStore())
                   - ConversationHistory instance: Existing history object
-                  - None: Defaults to SessionBuffer()
+                  - None: Defaults to InMemory()
 
         Notes:
             - summarize_model is ONLY used when strategy is "summarize" or "smart" (and smart decides to summarize)
@@ -118,9 +119,13 @@ class HistoryConfig:
         if isinstance(self.store, ConversationHistory):
             return self.store
 
-        # If store is None, default to SessionBuffer
+        # If store is None, default to InMemory
         if self.store is None:
-            self.store = SessionBuffer()
+            self.store = InMemory()
+
+        # If store is a HistoryStore (custom storage), wrap it in ConversationHistory
+        if isinstance(self.store, HistoryStore):
+            return ConversationHistory(store=self.store)
 
         # If store is a StorageType, create history from it
         if isinstance(self.store, StorageType):
@@ -128,7 +133,7 @@ class HistoryConfig:
             return create_history(store_type=self.store)
 
         raise ValueError(
-            f"store must be a StorageType instance, ConversationHistory instance, or None. "
+            f"store must be a StorageType instance, HistoryStore instance, ConversationHistory instance, or None. "
             f"Got: {type(self.store)}"
         )
 

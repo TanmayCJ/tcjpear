@@ -12,7 +12,7 @@ from .session_buffer import InMemoryHistoryStore
 from .file import FileHistoryStore
 
 # Export storage type configuration classes
-from .storage_types import StorageType, SessionBuffer, File, Sqlite, Postgresql, Redis
+from .storage_types import StorageType, InMemory, File, Sqlite, Postgresql, Redis
 
 # Export high-level interface
 from .history import ConversationHistory
@@ -48,7 +48,7 @@ __all__ = [
     'FileHistoryStore',
     'ConversationHistory',
     'StorageType',
-    'SessionBuffer',
+    'InMemory',
     'File',
     'Sqlite',
     'Postgresql',

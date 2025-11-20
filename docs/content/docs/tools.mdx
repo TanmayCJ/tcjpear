@@ -25,10 +25,16 @@ temperature_tool = create_tool(
     name="CelsiusToFahrenheit",
     description="Convert Celsius temperature to Fahrenheit",
     call_function=celsius_to_fahrenheit,
-    input_parameters={"c": float},
+    input_parameters={"c": float}, # Important 
     output_schema=float
 )
 ```
+## Input Parameters Matter
+
+The `input_parameters` serve two critical purposes:
+
+1. **Type Validation** - Peargent validates that the LLM provides the correct types before executing your function, preventing runtime errors
+2. **LLM Guidance** - The parameter types help the LLM understand what arguments to provide when calling the tool
 
 ## Using Tools with Agents
 
@@ -61,5 +67,12 @@ response = agent.run("Convert 25 degrees Celsius to Fahrenheit.")
 | `description` | `str` | What the tool does (helps LLM decide when to use it) | Yes |
 | `input_parameters` | `dict[str, type]` | Parameter names and types (e.g., `{"city": str}`) | Yes |
 | `call_function` | `Callable` | The Python function to execute | Yes |
+| `timeout` | `float \| None` | Max execution time in seconds (default: `None`) | No |
+| `max_retries` | `int` | Retry attempts on failure (default: `0`) | No |
+| `retry_delay` | `float` | Initial delay between retries in seconds (default: `1.0`) | No |
+| `retry_backoff` | `bool` | Use exponential backoff (default: `True`) | No |
+| `on_error` | `str` | Error handling: `"raise"`, `"return_error"`, or `"return_none"` (default: `"raise"`) | No |
+| `output_schema` | `Type[BaseModel]` | Pydantic model for output validation | No |
 
-For advanced configuration like `timeouts`, `retries`, `error-handling`, and `output validation`, see the **<u>Advanced Features</u>**.
+ For advanced configuration like `timeouts`, `retries`, `error-handling`, and `output validation`,
+ see the **<u>Advanced Features</u>**.

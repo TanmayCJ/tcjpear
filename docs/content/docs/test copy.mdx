@@ -75,3 +75,1149 @@ weather_tool = create_tool(
 result = weather_tool.run({"city": "NYC"})
 print(result.temperature)  # Type-safe access
 ```
+
+## Creating a Tool
+
+Use `create_tool()` to wrap a Python function into a tool that an agent can call. Every tool requires:
+
+- **`name`** - Unique identifier for the tool
+- **`description`** - Explains what the tool does (helps the LLM decide when to use it)
+- **`input_parameters`** - Defines parameter names and their types (e.g., `{"city": str, "units": str}`)
+- **`call_function`** - The Python function to execute
+
+### Why Input Parameters Matter
+
+The `input_parameters` serve two critical purposes:
+
+1. **Type Validation** - Peargent validates that the LLM provides the correct types before executing your function, preventing runtime errors
+2. **LLM Guidance** - The parameter types help the LLM understand what arguments to provide when calling the tool
+
+Below is a simple example tool that converts Celsius to Fahrenheit:
+
+```python
+from peargent import create_tool
+
+def celsius_to_fahrenheit(c: float):
+    return (c * 9/5) + 32
+
+temperature_tool = create_tool(
+    name="CelsiusToFahrenheit",
+    description="Convert Celsius temperature to Fahrenheit",
+    call_function=celsius_to_fahrenheit,
+    input_parameters={"c": float},
+    output_schema=float
+)
+```
+
+
+## Custom Storage Backend
+
+You can create custom storage backends by implementing the `HistoryStore` interface:
+
+```python
+from peargent.history import HistoryStore, Thread, Message
+from typing import Optional, List
+
+class CustomHistoryStore(HistoryStore):
+    """Custom storage backend implementation."""
+
+    def create_thread(self, metadata: Optional[dict] = None) -> str:
+        """Create a new conversation thread."""
+        # Your implementation
+        pass
+
+    def get_thread(self, thread_id: str) -> Optional[Thread]:
+        """Retrieve a thread by ID."""
+        # Your implementation
+        pass
+
+    def append_message(
+        self,
+        thread_id: str,
+        role: str,
+        content: str,
+        agent: Optional[str] = None,
+        tool_call: Optional[dict] = None,
+        metadata: Optional[dict] = None
+    ) -> Message:
+        """Add a message to a thread."""
+        # Your implementation
+        pass
+
+    def list_threads(self) -> List[str]:
+        """List all thread IDs."""
+        # Your implementation
+        pass
+
+    def delete_thread(self, thread_id: str) -> bool:
+        """Delete a thread."""
+        # Your implementation
+        pass
+```
+
+Use it directly with `HistoryConfig`:
+
+```python
+from peargent import create_agent
+from peargent.history import HistoryConfig
+from peargent.models import gemini
+
+# Create your custom store instance
+custom_store = CustomHistoryStore(connection_url="...")
+
+# Pass it directly to HistoryConfig
+agent = create_agent(
+    name="Assistant",
+    description="Helpful assistant",
+    persona="You are helpful",
+    model=gemini("gemini-2.5-flash"),
+    history=HistoryConfig(
+        auto_manage_context=True,
+        max_context_messages=20,
+        strategy="smart",
+        store=custom_store  # Pass HistoryStore directly
+    )
+)
+```
+```
+ Yes! Absolutely correct. Looking at the code, History supports many advanced capabilities beyond the basic
+  auto-context management:
+
+  1. Custom Storage Backends 
+
+  - Implement HistoryStore interface with 5 methods
+  - Pass directly to HistoryConfig(store=CustomHistoryStore())
+
+  2. Manual Thread Control 
+
+  - create_thread(metadata) - Create new conversation threads
+  - use_thread(thread_id) - Switch between threads
+  - list_threads() - Get all thread IDs
+  - delete_thread(thread_id) - Delete threads
+  - get_thread(thread_id) - Retrieve thread object
+
+  3. Serialization 
+
+  - Thread.to_dict() - Convert thread to dictionary
+  - Thread.from_dict(data) - Create thread from dictionary
+  - Message.to_dict() - Serialize messages
+  - Message.from_dict(data) - Deserialize messages
+
+  4. Low-Level Message Operations 
+  - Add messages:
+    - add_user_message(content, metadata)
+    - add_assistant_message(content, agent, metadata)
+    - add_tool_message(tool_call, agent, metadata)
+  - Query messages:
+    - get_messages(thread_id, role, agent) - Filter by role/agent
+    - get_message_count(thread_id) - Count messages
+  - Delete messages:
+    - delete_message(message_id, thread_id) - Delete single message
+    - delete_messages(message_ids, thread_id) - Bulk delete
+  - Trim messages:
+    - trim_messages(strategy, count, keep_system, thread_id) - Manual trimming
+    - Strategies: "first", "last", "first_last"
+  - Summarize messages:
+    - summarize_messages(model, start_index, end_index, keep_recent, thread_id) - Manual summarization with full
+  control
+
+  5. Context Management 
+
+  - Automatic: manage_context_window(model, max_messages, strategy, thread_id)
+  - Smart strategy selection: _select_smart_strategy() - Analyzes conversation characteristics
+  - Manual control: Direct access to trim/summarize methods
+
+  6. Thread Metadata 
+
+  - Store custom metadata with threads: create_thread(metadata={"user_id": "123", "session": "abc"})
+  - Store custom metadata with messages: add_user_message("Hello", metadata={"ip": "127.0.0.1"})
+
+  These advanced capabilities make it perfect for:
+  - Multi-user applications (one thread per user)
+  - Multi-session workflows (switch threads for different contexts)
+  - Custom storage backends (MongoDB, DynamoDB, etc.)
+  - Fine-grained control over conversation history
+  - Data export/import for backups or migrations
+  - Audit logs with message metadata
+
+  The beauty is that you get both high-level simplicity (just pass HistoryConfig()) and low-level power when you
+  need it!
+```
+```
+Perfect! Here's everything about routers in Peargent:
+
+  ---
+  Core Concepts
+
+  1. RouterResult Class
+
+  - Simple result object that routers return
+  - Contains next_agent_name (str or None)
+  - None = stop the workflow
+  - Any agent name = route to that agent
+
+  2. RouterFn Type
+
+  RouterFn = Callable[[State, int, Optional[Dict[str, Any]]], RouterResult]
+  - Type signature for custom router functions
+  - Takes 3 parameters:
+    a. state (State): Shared conversation history and key-value store
+    b. call_count (int): Number of agents executed so far
+    c. last_result (Optional[Dict]): Info about last agent's execution
+        - "agent": Name of last agent
+      - "output": Output from last agent
+      - "tools_used": List of tool names used
+  - Returns: RouterResult with next agent name or None
+
+  ---
+  Three Routing Approaches
+
+  1. Built-in Round-Robin Router (Default)
+
+  What it does:
+  - Cycles through agents sequentially
+  - Stops after all agents execute once
+  - Automatically used if no router specified
+
+  Code:
+  from peargent.core.router import round_robin_router
+
+  # Explicit usage
+  router = round_robin_router(["Agent1", "Agent2", "Agent3"])
+
+  pool = create_pool(
+      agents=[agent1, agent2, agent3],
+      router=router,  # Optional - this is the default
+      max_iter=3
+  )
+
+  # Implicit usage (default behavior)
+  pool = create_pool(
+      agents=[agent1, agent2, agent3],
+      max_iter=3
+  )
+
+  Pros:
+  - Simplest approach (zero config)
+  - No LLM costs
+  - Predictable, deterministic
+  - Great for testing
+
+  Cons:
+  - No intelligence - just sequential
+  - Can't skip agents or go backwards
+  - No conditional logic
+
+  Best for: Simple sequential workflows, testing, demos
+
+  ---
+  2. Custom Function-Based Router
+
+  What it does:
+  - Full control over routing logic
+  - Access to state, call_count, last_result
+  - Implement any custom logic
+
+  Function Signature:
+  def custom_router(state, call_count, last_result) -> RouterResult:
+      # Your custom logic here
+      return RouterResult("NextAgent")  # or None to stop
+
+  Parameters Explained:
+  - state: Access conversation history via state.history, get/set values via state.get(key) / state.set(key, value)
+  - call_count: Track how many agents have executed (starts at 0)
+  - last_result: Dictionary with:
+    - last_result["agent"]: Name of last agent that executed
+    - last_result["output"]: What the last agent returned
+    - last_result["tools_used"]: List like ["search", "analyze"]
+
+  Examples:
+
+  A. Sequential Router:
+  def sequential_router(state, call_count, last_result):
+      if call_count == 0:
+          return RouterResult("Researcher")
+      elif call_count == 1:
+          return RouterResult("Writer")
+      elif call_count == 2:
+          return RouterResult("Reviewer")
+      return RouterResult(None)  # Stop after 3 agents
+
+  B. Conditional Router (based on call count):
+  def conditional_router(state, call_count, last_result):
+      agents = ["Agent1", "Agent2", "Agent3"]
+
+      if call_count < len(agents):
+          return RouterResult(agents[call_count])
+
+      return RouterResult(None)
+
+  C. State-Based Router (intelligent decisions):
+  def intelligent_router(state, call_count, last_result):
+      # First call always goes to Researcher
+      if call_count == 0:
+          return RouterResult("Researcher")
+
+      # Check what the last agent did
+      if last_result:
+          last_agent = last_result.get("agent")
+          tools_used = last_result.get("tools_used", [])
+
+          # If researcher used search tool, go to analyst
+          if last_agent == "Researcher" and "search" in tools_used:
+              return RouterResult("Analyst")
+
+          # If analyst used analyze tool, go to writer
+          if last_agent == "Analyst" and "analyze" in tools_used:
+              return RouterResult("Writer")
+
+          # If writer finished, stop
+          if last_agent == "Writer":
+              return RouterResult(None)
+
+      # Check conversation state for keywords
+      if state.history:
+          last_message = state.history[-1]
+          content = str(last_message.get("content", "")).lower()
+
+          if "error" in content:
+              return RouterResult("ErrorHandler")
+          if "summarize" in content:
+              return RouterResult("Summarizer")
+
+      # Fallback: stop after 5 iterations
+      if call_count >= 5:
+          return RouterResult(None)
+
+      return RouterResult("Researcher")  # Default
+
+  Usage:
+  pool = create_pool(
+      agents=[researcher, analyst, writer],
+      router=intelligent_router,
+      max_iter=5
+  )
+
+  Pros:
+  - Full control over routing logic
+  - Access to conversation state and tool usage
+  - Can implement complex conditional logic
+  - No LLM costs for routing
+  - Deterministic and debuggable
+
+  Cons:
+  - Requires manual logic implementation
+  - No "intelligence" - follows rules you define
+
+  Best for:
+  - Fixed workflows with conditional branching
+  - Rule-based routing (if X then Y)
+  - Tool-based routing (if tool used, route to next agent)
+  - Cost-sensitive applications (no LLM for routing)
+
+  ---
+  3. LLM-Based Routing Agent (RoutingAgent)
+
+  What it does:
+  - Uses an LLM to make intelligent routing decisions
+  - Analyzes conversation history, agent capabilities, and tools
+  - Context-aware and adaptive
+
+  Creation:
+  from peargent import create_routing_agent
+
+  router = create_routing_agent(
+      name="SmartRouter",
+      model=groq("llama-3.3-70b-versatile"),
+      persona="""You are an intelligent router that decides which agent should act next.
+
+      Available agents:
+      - Researcher: Gathers information using search tools
+      - Analyst: Analyzes data and extracts insights
+      - Writer: Creates formatted output
+
+      Choose the most appropriate agent based on the conversation history.
+      Return STOP when the task is complete.""",
+      agents=["Researcher", "Analyst", "Writer"]  # Can pass agent names or Agent objects
+  )
+
+  pool = create_pool(
+      agents=[researcher, analyst, writer],
+      router=router,
+      max_iter=5
+  )
+
+  How RoutingAgent Works:
+
+  Internal Process:
+  1. Builds context from:
+    - All agent descriptions and tools
+    - Entire conversation history
+    - Last agent that executed
+  2. Uses Jinja2 template (routing_prompt.j2) that includes:
+    - Available agents with their roles and tools
+    - Full conversation history
+    - Last agent info
+    - Decision guidelines (avoid repeating agents, follow workflow progression)
+  3. LLM responds with:
+    - Agent name (e.g., "Researcher")
+    - Or "STOP" to end workflow
+  4. Validates response:
+    - Must be a valid agent name from the list
+    - Or "STOP"
+    - Raises error if invalid
+
+  Routing Template Guidelines:
+  - CRITICAL: Look at which tools have been used - if agent already completed their task, move to NEXT agent
+  - Identify what still needs to be done
+  - Match required next step to agent with relevant tools/expertise
+  - NEVER route to same agent twice in a row
+  - Follow natural workflow progression (don't go backwards unless error)
+  - Choose STOP only when all required steps complete
+
+  Common Workflow Pattern:
+  Data Collection → Analysis → Formatting/Reporting → STOP
+
+  Agent Objects vs Names:
+  # Method 1: Pass agent names (list of strings)
+  router = create_routing_agent(
+      name="Router",
+      model=groq(),
+      persona="...",
+      agents=["Researcher", "Writer", "Reviewer"]
+  )
+
+  # Method 2: Pass Agent objects (gets descriptions and tools)
+  router = create_routing_agent(
+      name="Router",
+      model=groq(),
+      persona="...",
+      agents=[researcher, writer, reviewer]  # Agent objects
+  )
+  When you pass Agent objects, the router automatically extracts:
+  - Agent names
+  - Agent descriptions
+  - Agent tools
+
+  This gives the LLM more context for better routing decisions.
+
+  Pros:
+  - Intelligent, context-aware decisions
+  - Adapts to conversation flow dynamically
+  - Can handle complex multi-agent scenarios
+  - No manual logic needed
+  - Can detect when task is complete
+
+  Cons:
+  - Costs money (LLM API call for each routing decision)
+  - Slower than function-based routers
+  - Non-deterministic (LLM might choose differently)
+  - Debugging is harder (LLM is a black box)
+
+  Best for:
+  - Dynamic workflows where routing depends on conversation content
+  - Complex multi-agent systems
+  - When you want adaptive behavior
+  - When routing logic is too complex to write manually
+
+  ---
+  RouterResult Details
+
+  Return values:
+  # Route to a specific agent
+  return RouterResult("AgentName")
+
+  # Stop the workflow
+  return RouterResult(None)
+
+  What happens when None is returned:
+  - Pool execution stops
+  - Last agent's output becomes the final result
+  - No more agents are called
+
+  ---
+  Key Differences Summary
+
+  | Feature       | Round-Robin      | Custom Function   | LLM Router        |
+  |---------------|------------------|-------------------|-------------------|
+  | Complexity    | Zero config      | Medium            | Low config        |
+  | Intelligence  | None             | Rule-based        | Context-aware     |
+  | Control       | Fixed sequence   | Full control      | LLM decides       |
+  | Cost          | Free             | Free              | LLM API costs     |
+  | Performance   | Instant          | Instant           | LLM latency       |
+  | Deterministic | Yes              | Yes               | No                |
+  | Best for      | Simple sequences | Conditional logic | Dynamic workflows |
+
+  ---
+  Advanced Patterns
+
+  1. Tool-Based Routing
+
+  Route based on which tools were used:
+  def tool_based_router(state, call_count, last_result):
+      if last_result:
+          tools = last_result.get("tools_used", [])
+
+          if "search" in tools:
+              return RouterResult("Analyst")  # Search done → analyze
+          if "analyze" in tools:
+              return RouterResult("Writer")   # Analysis done → write
+          if "format" in tools:
+              return RouterResult(None)       # Formatting done → stop
+
+      return RouterResult("Researcher")  # Default start
+
+  2. Error-Recovery Routing
+
+  Retry agents if errors occur:
+  def error_recovery_router(state, call_count, last_result):
+      if last_result:
+          output = str(last_result.get("output", "")).lower()
+          last_agent = last_result.get("agent")
+
+          # If output contains error, retry with error handler
+          if "error" in output or "failed" in output:
+              return RouterResult("ErrorHandler")
+
+          # If error handler just ran, retry original task
+          if last_agent == "ErrorHandler":
+              return RouterResult("Researcher")
+
+      # Normal flow
+      if call_count == 0:
+          return RouterResult("Researcher")
+      elif call_count == 1:
+          return RouterResult("Writer")
+
+      return RouterResult(None)
+
+  3. Content-Based Routing
+
+  Route based on conversation content:
+  def content_router(state, call_count, last_result):
+      # Analyze last message
+      if state.history:
+          last_msg = state.history[-1]
+          content = str(last_msg.get("content", "")).lower()
+
+          # Keyword-based routing
+          if "research" in content or "search" in content:
+              return RouterResult("Researcher")
+          if "analyze" in content or "insights" in content:
+              return RouterResult("Analyst")
+          if "write" in content or "summarize" in content:
+              return RouterResult("Writer")
+
+      # Stop if no keywords match
+      return RouterResult(None)
+
+  4. Max Iterations Safety
+
+  Always have a safety stop:
+  def safe_router(state, call_count, last_result):
+      # Safety: stop after max iterations
+      MAX_ITERATIONS = 10
+      if call_count >= MAX_ITERATIONS:
+          print(f"[Router] Max iterations ({MAX_ITERATIONS}) reached, stopping")
+          return RouterResult(None)
+
+      # Your routing logic here
+      # ...
+
+  ---
+  Integration with Pools
+
+  Pool handles router execution:
+  while call_count < max_iter:
+      # Get routing decision
+      if hasattr(router, "decide"):  # RoutingAgent
+          route_name = router.decide(state, last_result=last_result)
+          route = RouterResult(route_name)
+      else:  # Function-based router
+          route = router(state, call_count=call_count, last_result=last_result)
+
+      # Stop if router returns None
+      if not route or route.next_agent_name is None:
+          break
+
+      # Execute selected agent
+      agent = agents_dict.get(route.next_agent_name)
+      output = agent.run(current_input)
+
+      # Update state and last_result
+      state.add_message("assistant", str(output), agent=agent.name)
+      last_result = {
+          "agent": agent.name,
+          "output": output,
+          "tools_used": [tool names used]
+      }
+
+      call_count += 1
+
+  ---
+  Factory Functions
+
+  create_routing_agent():
+  def create_routing_agent(name: str, model, persona: str, agents: list):
+      """
+      Create a routing agent that intelligently selects the next agent.
+
+      Args:
+          name: Router agent name
+          model: LLM model instance
+          persona: Router persona/system prompt
+          agents: List of available agents (names or Agent objects)
+
+      Returns:
+          RoutingAgent instance
+      """
+
+  ---
+  Best Practices
+
+  1. Use round-robin for simple sequential workflows
+  2. Use custom functions for rule-based or conditional routing
+  3. Use LLM router for complex, dynamic workflows only
+  4. Always have a stop condition (return RouterResult(None))
+  5. Set appropriate max_iter to prevent infinite loops
+  6. Log routing decisions for debugging (print statements in custom routers)
+  7. Validate agent names before returning RouterResult
+  8. Check last_result for None before accessing (first iteration has None)
+  9. Use tool-based routing for pipeline workflows
+  10. Consider costs - LLM routing adds API charges per decision
+
+  ---
+  That's everything about routers in Peargent!
+  ```
+  ```
+   ---
+  State - Complete Reference
+
+  What is State?
+
+  State is a shared workspace object that exists across the entire pool execution. It's accessible by:
+  - Routers (to make routing decisions)
+  - Agents (via tools, though rarely used directly)
+  - Custom logic (in routers and tools)
+
+  Think of it as a shared notebook that all agents in a pool can read from and write to.
+
+  ---
+  Class Definition
+
+  class State:
+      """
+      Shared key-value store + message history across the pool loop.
+      Accessible by the router and the agents/tools.
+
+      Optionally supports persistent history through ConversationHistory.
+      """
+
+  Location: peargent/core/state.py
+
+  ---
+  Constructor
+
+  State(
+      data: Optional[Dict[str, Any]] = None,
+      history_manager: Optional[ConversationHistory] = None,
+      agents: Optional[Dict[str, Any]] = None
+  )
+
+  Parameters:
+  - data (dict, optional): Initial key-value data for state.kv
+  - history_manager (ConversationHistory, optional): Persistent history manager
+  - agents (dict, optional): Dictionary of agent objects {agent_name: agent_object}
+
+  Typically created by Pool, not manually.
+
+  ---
+  Attributes
+
+  1. state.kv - Key-Value Storage
+
+  state.kv: Dict[str, Any]
+  - Internal dictionary for storing custom data
+  - Don't access directly - use state.get() and state.set() instead
+  - Initialized from data parameter or empty dict
+
+  2. state.history - Conversation History
+
+  state.history: List[Dict[str, Any]]
+  - List of all conversation messages
+  - Each message is a dictionary:
+  {
+      "role": "user" | "assistant" | "tool",
+      "content": "message content",
+      "agent": "AgentName"  # Optional, only for assistant/tool messages
+  }
+  - Chronological order (oldest to newest)
+  - In-memory only - resets when pool run completes
+  - Use this for:
+    - Analyzing conversation flow
+    - Checking what was said
+    - Content-based routing decisions
+    - Keyword detection
+
+  Example:
+  # Get last message
+  last_msg = state.history[-1]
+
+  # Get last 3 messages
+  recent = state.history[-3:]
+
+  # Iterate through history
+  for msg in state.history:
+      role = msg["role"]
+      content = msg["content"]
+      agent = msg.get("agent", "")
+
+  3. state.history_manager - Persistent History
+
+  state.history_manager: Optional[ConversationHistory]
+  - Optional persistent storage backend
+  - If present, messages are automatically saved to storage (SQLite, PostgreSQL, etc.)
+  - If None, only in-memory history exists
+  - Typically you don't access this directly - Pool handles synchronization
+
+  4. state.agents - Agent Objects ✨ NEW
+
+  state.agents: Dict[str, Any]
+  - Dictionary mapping agent names to agent objects
+  - Format: {"AgentName": Agent(...), ...}
+  - Access full agent properties:
+    - agent.name - Agent name
+    - agent.description - Agent description
+    - agent.tools - Dict of tools {tool_name: Tool}
+    - agent.model - LLM model instance
+    - agent.persona - System prompt
+    - agent.stop_conditions - Stop conditions
+    - agent.history - Agent's persistent history (if configured)
+
+  Example:
+  # Get all agent names
+  agent_names = list(state.agents.keys())
+
+  # Get specific agent
+  researcher = state.agents.get("Researcher")
+
+  # Check agent's tools
+  if researcher:
+      has_search = "search" in researcher.tools
+      tool_list = list(researcher.tools.keys())
+      print(f"Researcher has tools: {tool_list}")
+
+  # Iterate through all agents
+  for name, agent in state.agents.items():
+      print(f"{name}: {agent.description}")
+
+  ---
+  Methods
+
+  1. state.add_message(role, content, agent=None)
+
+  Add a message to conversation history.
+
+  Parameters:
+  - role (str): Message role - "user", "assistant", or "tool"
+  - content (str): Message content
+  - agent (str, optional): Name of agent that generated this message
+
+  Returns: None
+
+  Side Effects:
+  - Appends message to state.history
+  - If history_manager exists, persists to storage backend
+
+  Usage:
+  # Add user message
+  state.add_message("user", "What is AI?")
+
+  # Add assistant message
+  state.add_message("assistant", "AI is artificial intelligence.", agent="Researcher")
+
+  # Add tool message
+  state.add_message("tool", "Search results: ...", agent="Researcher")
+
+  Typically called by Pool, not manually in routers.
+
+  ---
+  2. state.get(key, default=None)
+
+  Get a value from the key-value store.
+
+  Parameters:
+  - key (str): Key to retrieve
+  - default (any, optional): Default value if key doesn't exist (default: None)
+
+  Returns: Value associated with key, or default if not found
+
+  Usage:
+  # Get value
+  workflow_stage = state.get("workflow_stage")
+
+  # Get with default
+  error_count = state.get("error_count", 0)
+
+  # Check if key exists
+  if state.get("initialized"):
+      # ...
+
+  ---
+  3. state.set(key, value)
+
+  Set a value in the key-value store.
+
+  Parameters:
+  - key (str): Key to set
+  - value (any): Value to store (can be any Python object)
+
+  Returns: None
+
+  Usage:
+  # Store simple values
+  state.set("workflow_stage", "analysis")
+  state.set("error_count", 3)
+
+  # Store complex values
+  state.set("config", {"max_retries": 5, "timeout": 30})
+  state.set("agents_executed", ["Researcher", "Analyst"])
+  state.set("cache", {"result": [1, 2, 3]})
+
+  # Update value
+  count = state.get("counter", 0)
+  state.set("counter", count + 1)
+
+  ---
+  Common Usage Patterns
+
+  1. Track Agent Execution
+
+  def my_router(state, call_count, last_result):
+      # Initialize on first call
+      if not state.get("agents_executed"):
+          state.set("agents_executed", [])
+
+      # Track which agents ran
+      if last_result:
+          executed = state.get("agents_executed", [])
+          executed.append(last_result["agent"])
+          state.set("agents_executed", executed)
+
+      print(f"Agents executed: {state.get('agents_executed')}")
+
+  2. Workflow Stage Tracking
+
+  def workflow_router(state, call_count, last_result):
+      # Initialize workflow stage
+      if not state.get("stage"):
+          state.set("stage", "collection")
+
+      stage = state.get("stage")
+
+      if stage == "collection":
+          state.set("stage", "analysis")
+          return RouterResult("Analyst")
+      elif stage == "analysis":
+          state.set("stage", "output")
+          return RouterResult("Writer")
+
+      return RouterResult(None)
+
+  3. Error Handling
+
+  def error_aware_router(state, call_count, last_result):
+      error_count = state.get("error_count", 0)
+
+      if last_result:
+          output = str(last_result["output"]).lower()
+
+          if "error" in output or "failed" in output:
+              error_count += 1
+              state.set("error_count", error_count)
+
+              if error_count > 3:
+                  print("Too many errors, stopping")
+                  return RouterResult(None)
+
+              # Retry
+              return RouterResult("ErrorHandler")
+
+      return RouterResult("Worker")
+
+  4. Conversation Analysis
+
+  def content_router(state, call_count, last_result):
+      if not state.history:
+          return RouterResult("Researcher")
+
+      # Analyze last message
+      last_msg = state.history[-1]
+      content = str(last_msg.get("content", "")).lower()
+
+      # Keyword-based routing
+      if "research" in content or "search" in content:
+          return RouterResult("Researcher")
+      if "analyze" in content or "insights" in content:
+          return RouterResult("Analyst")
+      if "summarize" in content or "write" in content:
+          return RouterResult("Writer")
+
+      return RouterResult(None)
+
+  5. Agent Property-Based Routing ✨ NEW
+
+  def dynamic_router(state, call_count, last_result):
+      # Find agent with specific tool
+      for agent_name, agent in state.agents.items():
+          if "search" in agent.tools:
+              return RouterResult(agent_name)
+
+      # Find agent by description keyword
+      for agent_name, agent in state.agents.items():
+          if "analysis" in agent.description.lower():
+              return RouterResult(agent_name)
+
+      return RouterResult(None)
+
+  6. Caching Results
+
+  def caching_router(state, call_count, last_result):
+      # Check cache
+      cached_result = state.get("search_cache")
+      if cached_result:
+          print("Using cached search result")
+          return RouterResult("Analyst")
+
+      # If no cache, do search
+      if last_result and "search" in last_result.get("tools_used", []):
+          # Cache the result
+          state.set("search_cache", last_result["output"])
+          return RouterResult("Analyst")
+
+      return RouterResult("Researcher")
+
+  7. Complex State Tracking
+
+  def stateful_router(state, call_count, last_result):
+      # Initialize complex state
+      if not state.get("workflow_state"):
+          state.set("workflow_state", {
+              "phase": "planning",
+              "completed_tasks": [],
+              "pending_tasks": ["research", "analysis", "writing"],
+              "retries": {}
+          })
+
+      workflow = state.get("workflow_state")
+
+      # Check what's pending
+      if workflow["pending_tasks"]:
+          next_task = workflow["pending_tasks"][0]
+
+          if next_task == "research":
+              workflow["pending_tasks"].remove("research")
+              workflow["completed_tasks"].append("research")
+              state.set("workflow_state", workflow)
+              return RouterResult("Researcher")
+
+      return RouterResult(None)
+
+  ---
+  Message Format in state.history
+
+  Each message in state.history is a dictionary:
+
+  {
+      "role": "user" | "assistant" | "tool",
+      "content": str,          # Message content
+      "agent": str | None      # Agent name (only for assistant/tool)
+  }
+
+  Examples:
+
+  # User message
+  {
+      "role": "user",
+      "content": "What is machine learning?",
+      "agent": None
+  }
+
+  # Assistant message
+  {
+      "role": "assistant",
+      "content": "Machine learning is a subset of AI...",
+      "agent": "Researcher"
+  }
+
+  # Tool message
+  {
+      "role": "tool",
+      "content": "Search results: ...",
+      "agent": "Researcher"
+  }
+
+  ---
+  How State is Created and Used
+
+  Created by Pool:
+
+  # In Pool.__init__
+  if default_state:
+      self.state = default_state
+      if history and not self.state.history_manager:
+          self.state.history_manager = history
+      if not self.state.agents:
+          self.state.agents = self.agents_dict
+  else:
+      self.state = State(
+          history_manager=history,
+          agents=self.agents_dict
+      )
+
+  Used in Pool.run():
+
+  # Add user input
+  self.state.add_message(role="user", content=user_input, agent=None)
+
+  # Pass to router
+  route = self.router(self.state, call_count=call_count, last_result=last_result)
+
+  # Add agent output
+  self.state.add_message("assistant", str(output), agent=agent.name)
+
+  Used in Routers:
+
+  def my_router(state, call_count, last_result):
+      # Access history
+      messages = state.history
+
+      # Access agents
+      agents = state.agents
+
+      # Custom storage
+      state.set("key", "value")
+      value = state.get("key")
+
+      return RouterResult("NextAgent")
+
+  ---
+  Creating Custom State
+
+  You can create a custom state and pass it to the pool:
+
+  from peargent.core.state import State
+
+  # Create custom state with initial data
+  custom_state = State(
+      data={
+          "max_retries": 5,
+          "timeout": 30,
+          "workflow_stage": "planning"
+      }
+  )
+
+  # Use it in pool
+  pool = create_pool(
+      agents=[agent1, agent2],
+      default_state=custom_state,
+      max_iter=5
+  )
+
+  Pool will automatically add:
+  - agents (from pool's agents)
+  - history_manager (if history provided)
+
+  ---
+  Best Practices
+
+  1. Use state.get() and state.set() instead of accessing state.kv directly
+  2. Always provide defaults when using state.get("key", default)
+  3. Initialize state values on first router call
+  4. Use meaningful key names for custom storage
+  5. Don't mutate state.history directly - use state.add_message()
+  6. Check state.agents availability before accessing (may be empty in some contexts)
+  7. Use state for coordination between agents, not for agent-internal state
+  8. Don't store large objects in state - keep it lightweight
+  9. Clean up state when workflow completes (or let Pool handle it)
+  10. Document custom state keys in your router comments
+
+  ---
+  State vs Agent.history
+
+  | Feature  | state.history          | agent.history                    |
+  |----------|------------------------|----------------------------------|
+  | Scope    | Entire pool execution  | Single agent                     |
+  | Lifetime | Duration of pool.run() | Persistent across runs           |
+  | Format   | List of dicts          | ConversationHistory object       |
+  | Storage  | In-memory              | Can be persistent (SQLite, etc.) |
+  | Access   | Routers, tools         | Agent internal                   |
+  | Purpose  | Routing decisions      | Agent memory                     |
+
+  ---
+  Complete Example
+
+  from peargent import create_agent, create_pool, State
+  from peargent.core.router import RouterResult
+  from peargent.models import groq
+
+  def comprehensive_router(state, call_count, last_result):
+      """Router demonstrating all State features."""
+
+      # 1. ACCESS CONVERSATION HISTORY
+      print(f"Total messages: {len(state.history)}")
+      if state.history:
+          last_msg = state.history[-1]
+          print(f"Last message: {last_msg['role']}: {last_msg['content'][:50]}...")
+
+      # 2. ACCESS AGENTS
+      print(f"Available agents: {list(state.agents.keys())}")
+      for name, agent in state.agents.items():
+          print(f"  {name}: {list(agent.tools.keys())}")
+
+      # 3. CUSTOM KEY-VALUE STORAGE
+      # Initialize
+      if not state.get("initialized"):
+          state.set("initialized", True)
+          state.set("workflow_stage", "start")
+          state.set("execution_log", [])
+
+      # Track execution
+      log = state.get("execution_log", [])
+      if last_result:
+          log.append({
+              "agent": last_result["agent"],
+              "tools": last_result["tools_used"]
+          })
+          state.set("execution_log", log)
+
+      # Get workflow stage
+      stage = state.get("workflow_stage")
+
+      # 4. ROUTING LOGIC
+      if stage == "start":
+          state.set("workflow_stage", "processing")
+          return RouterResult("Researcher")
+      elif stage == "processing":
+          state.set("workflow_stage", "complete")
+          return RouterResult("Writer")
+
+      return RouterResult(None)
+
+  # Create pool
+  agents = [
+      create_agent("Researcher", "Researches", "You research.", groq(), []),
+      create_agent("Writer", "Writes", "You write.", groq(), [])
+  ]
+
+  pool = create_pool(
+      agents=agents,
+      router=comprehensive_router,
+      max_iter=3
+  )
+
+  result = pool.run("Process this request")
+
+  ---
+  That's EVERYTHING about State in Peargent!
+  ```

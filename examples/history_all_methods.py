@@ -11,7 +11,7 @@ import os
 from peargent import create_agent, create_pool
 from peargent.history import (
     HistoryConfig,
-    SessionBuffer,
+    InMemory,
     File,
     Sqlite,
     Postgresql,
@@ -37,7 +37,7 @@ def example_session_buffer():
         persona="You are helpful and friendly.",
         model=groq("llama-3.3-70b-versatile"),
         history=HistoryConfig(
-            store=SessionBuffer()
+            store=InMemory()
         )
     )
 
@@ -223,6 +223,7 @@ def example_agent_pools():
         model=groq("llama-3.3-70b-versatile"),
         tools=[]
     )
+    
 
     # Create pool with shared history
     pool = create_pool(
@@ -236,6 +237,8 @@ def example_agent_pools():
             store=Sqlite(database_path="./pool_conversations/")
         )
     )
+    
+    pool.history.use_thread()
 
     # Use the pool - all agents share the same conversation history
     result = pool.run("Research the benefits of exercise and write a brief summary.")
@@ -369,10 +372,10 @@ def print_summary():
 
 🗄️  STORAGE BACKEND OPTIONS:
 
-1. SessionBuffer()
+1. InMemory()
    └─ In-memory (temporary)
    └─ Best for: Testing, development
-   └─ Example: store=SessionBuffer()
+   └─ Example: store=InMemory()
 
 2. File(storage_dir="./path")
    └─ JSON files on disk
@@ -413,7 +416,7 @@ def print_summary():
 💡 QUICK START:
 
 For development:
-    history=HistoryConfig(store=SessionBuffer())
+    history=HistoryConfig(store=InMemory())
 
 For production:
     history=HistoryConfig(

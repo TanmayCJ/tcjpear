@@ -111,10 +111,11 @@ article = pool.run("Write an article about renewable energy trends")
 | Parameter | Type | Description | Required |
 | :--- | :--- | :--- | :--- |
 | `agents` | `list[Agent]` | List of agents in the pool | Yes |
-| `default_model` | `Model` | Default model for agents without one | No* |
-| `router` | `RouterFn \| RoutingAgent` | Custom router function or routing agent | No |
+| `default_model` | `Model` | Default model for agents without one | No |
+| `router` | `RouterFn \| RoutingAgent` | Custom router function or routing agent (default: round-robin) | No |
 | `max_iter` | `int` | Maximum agent executions (default: `5`) | No |
-
-\* If model is not specified for agents, the `default_model` is used.
+| `default_state` | `State` | Custom initial state object | No |
+| `history` | `HistoryConfig` | Shared conversation history across all agents | No |
+| `tracing` | `bool` | Enable tracing for all agents (default: `False`) | No |
 
 For advanced configuration like `history` and `tracing`, see the **<u>Advanced Features</u>**.

@@ -24,7 +24,7 @@ from .core.history import (
     Thread,
     Message,
     StorageType,
-    SessionBuffer,
+    InMemory,
     File,
     Sqlite,
     Postgresql,
@@ -56,7 +56,7 @@ __all__ = [
     'RoutingAgent',
     'RouterResult',
     'State',
-    'SessionBuffer',
+    'InMemory',
     'File',
     'Sqlite',
     'Postgresql',
@@ -292,7 +292,7 @@ def create_pool(agents, default_model=None, router=None, max_iter=5, default_sta
                 auto_manage_context=True,
                 max_context_messages=15,
                 strategy="smart",
-                store=SessionBuffer()
+                store=InMemory()
             )
         )
 
@@ -345,7 +345,7 @@ def create_history(store_type=None, **kwargs) -> ConversationHistory:
 
     Args:
         store_type: Either a string ("session_buffer", "file", "sqlite", "postgresql") for backward compatibility,
-                   or a StorageType instance (SessionBuffer(), File(), Sqlite(), Postgresql(), Redis()) for new DSL.
+                   or a StorageType instance (InMemory(), File(), Sqlite(), Postgresql(), Redis()) for new DSL.
         **kwargs: Additional parameters for backward compatibility with string-based API:
                  - storage_dir: Directory for file-based storage
                  - connection_string: PostgreSQL connection string
@@ -357,7 +357,7 @@ def create_history(store_type=None, **kwargs) -> ConversationHistory:
 
     Examples:
         # New DSL (recommended)
-        history = create_history(store_type=SessionBuffer())
+        history = create_history(store_type=InMemory())
         history = create_history(store_type=File(storage_dir="./my_conversations"))
         history = create_history(store_type=Sqlite(database_path="./my_app.db"))
         history = create_history(store_type=Postgresql(
@@ -377,7 +377,7 @@ def create_history(store_type=None, **kwargs) -> ConversationHistory:
 
     # Handle new class-based DSL
     if isinstance(store_type, StorageType):
-        if isinstance(store_type, SessionBuffer):
+        if isinstance(store_type, InMemory):
             store = InMemoryHistoryStore()
         elif isinstance(store_type, File):
             store = FileHistoryStore(storage_dir=store_type.storage_dir)

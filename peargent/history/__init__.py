@@ -10,7 +10,7 @@ from ..config.history import HistoryConfig
 
 # Import storage types from core.history
 from ..core.history import (
-    SessionBuffer,
+    InMemory,
     File,
     Sqlite,
     Postgresql,
@@ -25,7 +25,7 @@ from ..core.history import (
 # Define what gets exported from this module
 __all__ = [
     'HistoryConfig',
-    'SessionBuffer',
+    'InMemory',
     'File',
     'Sqlite',
     'Postgresql',
