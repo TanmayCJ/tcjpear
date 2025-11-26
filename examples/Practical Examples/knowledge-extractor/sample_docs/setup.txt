@@ -1,0 +1,26 @@
+Setup Instructions
+==================
+
+Requirements:
+- Python 3.9+
+- OpenAI API key
+- 8GB RAM minimum
+
+Installation Steps:
+1. Clone the repository
+2. Install dependencies: pip install -r requirements.txt
+3. Set environment variables:
+   - OPENAI_API_KEY=your_key
+   - DEBUG_MODE=false
+4. Run tests: pytest tests/
+5. Start application: python main.py
+
+Configuration:
+- Edit config.yaml for custom settings
+- Agents can be configured in agents/ folder
+- Memory settings in memory.py
+
+Troubleshooting:
+- If imports fail, check PYTHONPATH
+- For API errors, verify your API key
+- Memory issues? Reduce batch size in config

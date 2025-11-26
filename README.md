@@ -42,7 +42,7 @@ result = agent.run("What is the capital of France?")
 print(result)
 ```
 
-For more examples and detailed documentation, visit [peargent.online](https://peargent.online).
+For more examples and detailed documentation, visit [Docs](https://peargent.online).
 
 ## License
 

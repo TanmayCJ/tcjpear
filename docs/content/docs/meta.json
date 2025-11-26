@@ -19,14 +19,14 @@
     "models",
     "long_term_memory",
     "---Advanced Features---",
-    "History Management",
-    "Structured Output",
-    "Error Handling in Tools",
-    "Tracing and Observability",
+    "history-management",
+    "structured-output",
+    "error-handling-in-tools",
+    "tracing-and-observability",
     "Streaming",
     "---Practical Playbooks---",
-    "Practical Playbooks/effective-personas",
-    "Practical Playbooks/custom-tooling",
-    "Practical Playbooks/cost-optimization"
+    "practical-playbooks/effective-personas",
+    "practical-playbooks/custom-tooling",
+    "practical-playbooks/cost-optimization"
   ]
 }
