@@ -10,12 +10,19 @@ import { cn } from '@/lib/cn';
 export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [version, setVersion] = useState('v0.1 Public Beta');
 
   useEffect(() => {
     setMounted(true);
     // Prevent scrolling on this page to keep the hero locked
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+
+    // Fetch version from API
+    fetch('/api/version')
+      .then(res => res.json())
+      .then(data => setVersion(data.version))
+      .catch(() => setVersion('v0.1 Public Beta')); // Fallback
 
     return () => {
       document.body.style.overflow = '';
@@ -51,8 +58,8 @@ export default function HomePage() {
         )}>
 
           {/* Badge / Pill */}
-          <div className="mb-8 inline-flex items-center px-3 py-1 rounded-full border border-[#7AA846]/30 bg-[#7AA846]/10 backdrop-blur-sm">
-            <span className="text-xs font-medium text-[#7AA846] uppercase tracking-wider">v0.1 Public Beta</span>
+          <div className="mb-8 inline-flex items-center px-4 py-2 rounded-full border border-[#7AA846]/50 bg-[#7AA846]/20 backdrop-blur-md shadow-lg">
+            <span className="text-xs font-semibold text-[#5a7c33] uppercase tracking-wider">{version}</span>
           </div>
 
           {/* Hero Heading */}
