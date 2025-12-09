@@ -65,12 +65,11 @@ export default function SocialsPage() {
         },
         {
             name: 'X (formerly Twitter)',
-            url: 'https://twitter.com/peargent',
+            url: 'https://x.com/peargent_py',
             icon: Twitter,
             description: 'Follow for updates',
             bgImage: blueCard,
             textColor: 'text-black',
-            comingSoon: true
         },
         {
             name: 'Discord',
