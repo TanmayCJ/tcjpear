@@ -168,8 +168,8 @@ class TestAgentWithTools:
 
         assert len(agent.tools) == 1
         assert "sample" in agent.tools
-        assert agent.tools["sample"].input_parameters["x"] == int
-        assert agent.tools["sample"].input_parameters["y"] == str
+        assert agent.tools["sample"].input_parameters["x"] is int
+        assert agent.tools["sample"].input_parameters["y"] is str
 
 
 class TestAgentConfiguration:
