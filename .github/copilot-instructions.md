@@ -1,37 +1,95 @@
-# Peargent Python Agent Framework - Code Review Guidelines
+# Peargent Python Agent Framework – Copilot Code Review Guidelines
 
 ## Purpose & Scope
 
-Guidelines for reviewing Peargent Python framework PRs. PyPI package (MIT), Python 3.9-3.12, ~41 source files for AI agents with multi-LLM support.
+These guidelines define how GitHub Copilot must review Pull Requests for the **Peargent Python Agent Framework**.
+
+Peargent is an open-source (MIT) PyPI package targeting **Python 3.9–3.12**, focused on building AI agents with multi-LLM support.  
+PR reviews must prioritize **correctness, API safety, and maintainability**, while keeping PRs **readable and low-noise**.
 
 ---
 
-## Review Comment Format
+## Review Philosophy (IMPORTANT)
 
-**Use collapsible sections for long review comments to keep PRs readable:**
+- Prefer **one single high-level summary comment** over multiple inline comments.
+- Inline comments are **allowed ONLY** for:
+  - Bugs
+  - Security issues
+  - Broken imports
+  - Violations of **Critical Rules** listed below
+- Avoid over-reviewing. If code is acceptable, say so.
+
+**The goal is signal, not volume.**
+
+---
+
+## Mandatory Comment Formatting
+
+### Collapsible Comments (REQUIRED)
+
+- Any review comment longer than **3 lines** MUST be wrapped in a collapsible section.
+- Multiple related issues MUST be grouped into **one** collapsible comment.
+
+### Required Format
 
 ```markdown
 <details>
 <summary>⚠️ Issue: Missing type hints</summary>
 
-The function `calculate_result` needs type hints for parameters and return value.
+The function `calculate_result` is missing type hints.
 
 **Suggested fix:**
-\`\`\`python
+```python
 def calculate_result(x: int, y: int) -> int:
     return x + y
-\`\`\`
+````
+
 </details>
 ```
 
 ---
 
+## Do NOT Comment On (STRICT)
+
+Copilot MUST NOT comment on:
+
+* Formatting, spacing, or line length (handled by Black)
+* Variable or function naming unless misleading or incorrect
+* Suggestions to “add comments” or “improve readability”
+* Minor refactors or stylistic preferences
+* Suggestions already enforced by CI
+* Hypothetical future improvements
+* Personal preferences or alternative designs without bugs
+
+---
+
+## Blocking vs Non-Blocking Issues
+
+### Blocking Issues (require changes)
+
+* Failing tests
+* Broken imports
+* Violations of public API rules
+* Missing type hints on **public** APIs
+* Importing internal/private modules
+* Breaking backward compatibility
+
+### Non-Blocking Issues
+
+* Optional refactors
+* Performance ideas
+* Code organization suggestions
+
+👉 Non-blocking issues MUST appear **only in the summary**, not as inline comments.
+
+---
+
 ## Critical Build Requirements
 
-### Environment Setup - ALWAYS REQUIRED FIRST
+### Environment Setup (ALWAYS REQUIRED FIRST)
 
 ```bash
-venv\Scripts\activate  # Windows
+venv\Scripts\activate      # Windows
 source venv/bin/activate  # Linux/macOS
 pip install -e .
 ```
@@ -42,63 +100,85 @@ pip install -e .
 # Verify imports
 python -c "from peargent import create_agent, create_tool, create_pool; print('OK')"
 
-# Run tests - MUST use python -m pytest (not just pytest)
+# Run tests (MUST use python -m pytest)
 python -m pytest tests/
 
 # Format & lint
 black peargent/
 flake8 peargent/
 
-# Build
+# Build & validate distribution
 python -m build
 twine check dist/*
 ```
 
-**Known Issues:**
-- Must use `python -m pytest`, not `pytest` (import errors otherwise)
-- Tests requiring API keys will skip/fail without `.env` config (expected)
-- License deprecation warnings in build are non-blocking (safe to ignore)
+### Known Issues (DO NOT FLAG)
+
+* `pytest` must be run as `python -m pytest` (import errors otherwise)
+* Tests requiring API keys may skip/fail without `.env`
+* License deprecation warnings during build are non-blocking
 
 ---
 
-## CI Pipeline (PR Requirements)
+## CI Pipeline Awareness
 
-`.github/workflows/pr-test.yml` runs on every PR:
-- Python 3.9, 3.10, 3.11, 3.12 matrix test
-- Import validation, package build, distribution check
-- **All versions must pass for merge**
+The PR CI workflow runs:
+
+* Python 3.9, 3.10, 3.11, 3.12 test matrix
+* Import validation
+* Package build & distribution check
+
+**Rules:**
+
+* Do NOT restate CI failures unless additional context is required
+* Assume contributors will read CI logs
+* All versions must pass before merge
 
 ---
 
 ## Code Style Rules
 
-- **PEP 8 compliance** (Black + Flake8 required)
-- **Type hints** on all function signatures
-- **Docstrings** for public APIs
-- **Conventional commits**: `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`
+* PEP 8 compliance (Black + Flake8)
+* Type hints on all function signatures
+* Docstrings for public APIs
+* Conventional commits required:
 
-### Import Pattern (CRITICAL)
+  * `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`
+
+---
+
+## Import Rules (CRITICAL)
+
+### ✅ Correct (Public API only)
 
 ```python
-# ✅ CORRECT - Use factory functions
 from peargent import create_agent, create_tool, create_pool
 from peargent.models import groq, anthropic, openai
-
-# ❌ WRONG - Never import internal classes
-from peargent._core.agent import Agent  # Internal class
-from peargent._core.tool import Tool    # Internal class
 ```
 
-### Example Code Patterns
+### ❌ Incorrect (NEVER allowed)
 
-**Tool definition:**
+```python
+from peargent._core.agent import Agent
+from peargent._core.tool import Tool
+```
+
+Importing internal modules is a **blocking issue**.
+
+---
+
+## Example Patterns
+
+### Tool Definition
+
 ```python
 @create_tool(description="Calculate expression")
 def calculator(expression: str) -> str:
     return str(eval(expression))
 ```
 
-**Agent creation:**
+### Agent Creation
+
 ```python
 agent = create_agent(
     name="assistant",
@@ -110,45 +190,65 @@ agent = create_agent(
 
 ---
 
-## Project Structure
+## Project Structure Awareness
 
-**Key files:**
-- `peargent/__init__.py` (577 lines) - Public API exports
-- `peargent/_core/agent.py` (1160 lines) - Core agent logic
-- `peargent/_core/tool.py` - Tool system & validation
-- `peargent/models/*.py` - LLM provider adapters (OpenAI, Anthropic, Groq, Gemini, Azure)
-- `pyproject.toml` - Build config, dependencies, version 0.1.4
+Key files:
 
-**Tests:** `tests/test_tool.py` (8 tests), `test_smoke.py`, `test_persona.py`, `test_anthropic.py`
+* `peargent/__init__.py` – Public API exports
+* `peargent/_core/agent.py` – Core agent logic
+* `peargent/_core/tool.py` – Tool system
+* `peargent/models/*.py` – LLM providers
+* `pyproject.toml` – Build configuration
+
+Tests:
+
+* `tests/test_tool.py`
+* `tests/test_smoke.py`
+* `tests/test_persona.py`
+* `tests/test_anthropic.py`
 
 ---
 
 ## Common Review Scenarios
 
-### Adding New Tool
-1. Create in `peargent/tools/`
-2. Export from `peargent/tools/__init__.py`
+### Adding a New Tool
+
+1. Add file in `peargent/tools/`
+2. Export in `peargent/tools/__init__.py`
 3. Register in `get_tool_by_name()` if built-in
 4. Add tests to `tests/test_tool.py`
-5. Add example to `examples/02-tools/`
+5. Add example in `examples/02-tools/`
 
-### Adding New Model Provider
-1. Create `peargent/models/newprovider.py` following `base.py` interface
+### Adding a New Model Provider
+
+1. Create `peargent/models/newprovider.py` following `base.py`
 2. Export from `peargent/models/__init__.py`
-3. Add example to `examples/01-getting-started/`
-4. Update README.md
+3. Add example in `examples/01-getting-started/`
+4. Update `README.md`
 
 ---
 
-## Review Checklist
+## Review Checklist (Before Approval)
 
-Before approving:
-- [ ] Venv activated & `pip install -e .` run
-- [ ] `black peargent/` formatted
-- [ ] `flake8 peargent/` passes
-- [ ] `python -m pytest tests/` passes
-- [ ] Imports work: `python -c "from peargent import create_agent, create_tool, create_pool"`
-- [ ] `python -m build && twine check dist/*` succeeds
-- [ ] Conventional commit message
-- [ ] Type hints added
-- [ ] Docstrings for public APIs
+* [ ] Virtual environment activated
+* [ ] `pip install -e .` run
+* [ ] `black peargent/`
+* [ ] `flake8 peargent/`
+* [ ] `python -m pytest tests/`
+* [ ] Imports verified
+* [ ] `python -m build && twine check dist/*`
+* [ ] Conventional commit message
+* [ ] Type hints added
+* [ ] Public APIs documented
+
+---
+
+## Final Instruction to Reviewer (MANDATORY)
+
+If **no blocking issues** are found:
+
+* Respond with **one short approval summary**
+* Do NOT leave inline comments
+* Do NOT suggest optional improvements
+
+Silence is acceptable when the PR meets all requirements.
