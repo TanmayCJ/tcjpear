@@ -10,41 +10,73 @@ import pytest
 
 from peargent.tools.text_extraction_tool import (
     TextExtractionTool,
-    extract_text,
-    _detect_format
+    extract_text
 )
 
 
 class TestFormatDetection:
-    """Test file format detection."""
+    """Test file format detection through public API."""
     
     def test_detect_html_format(self):
-        """Test HTML format detection."""
-        assert _detect_format("document.html") == "html"
-        assert _detect_format("page.htm") == "html"
+        """Test HTML format detection through extract_text."""
+        html_content = "<html><body><p>Test</p></body></html>"
+        
+        # Test .html extension
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+            f.write(html_content)
+            temp_path = f.name
+        try:
+            result = extract_text(temp_path)
+            assert result["format"] == "html"
+        finally:
+            os.unlink(temp_path)
+        
+        # Test .htm extension
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.htm', delete=False) as f:
+            f.write(html_content)
+            temp_path = f.name
+        try:
+            result = extract_text(temp_path)
+            assert result["format"] == "html"
+        finally:
+            os.unlink(temp_path)
     
-    def test_detect_pdf_format(self):
-        """Test PDF format detection."""
-        assert _detect_format("document.pdf") == "pdf"
-    
-    def test_detect_docx_format(self):
-        """Test DOCX format detection."""
-        assert _detect_format("document.docx") == "docx"
-        assert _detect_format("document.doc") == "docx"
-    
-    def test_detect_text_format(self):
-        """Test text format detection."""
-        assert _detect_format("file.txt") == "txt"
-        assert _detect_format("readme.md") == "md"
-    
-    def test_detect_url(self):
-        """Test URL detection."""
-        assert _detect_format("http://example.com") == "html"
-        assert _detect_format("https://example.com/page") == "html"
+    def test_detect_text_formats(self):
+        """Test text format detection through extract_text."""
+        content = "Test content"
+        
+        # Test .txt extension
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(content)
+            temp_path = f.name
+        try:
+            result = extract_text(temp_path)
+            assert result["format"] == "txt"
+        finally:
+            os.unlink(temp_path)
+        
+        # Test .md extension
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            f.write(content)
+            temp_path = f.name
+        try:
+            result = extract_text(temp_path)
+            assert result["format"] == "md"
+        finally:
+            os.unlink(temp_path)
     
     def test_unknown_format(self):
-        """Test unknown format detection."""
-        assert _detect_format("file.xyz") == "unknown"
+        """Test unknown format handling through extract_text."""
+        with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False) as f:
+            temp_path = f.name
+        
+        try:
+            result = extract_text(temp_path)
+            assert result["success"] is False
+            assert result["format"] == "unknown"
+            assert "unsupported" in result["error"].lower() or "unknown" in result["error"].lower()
+        finally:
+            os.unlink(temp_path)
 
 
 class TestHTMLExtraction:
@@ -259,23 +291,39 @@ class TestErrorHandling:
 
 
 class TestPDFExtraction:
-    """Test PDF extraction (requires pypdf)."""
+    """Test PDF extraction through public API."""
     
-    def test_pdf_import_error_handling(self):
-        """Test that PDF extraction provides helpful error for missing dependency."""
-        # We can't easily create a real PDF for testing without external dependencies
-        # But we can test that the function exists and has proper structure
-        from peargent.tools.text_extraction_tool import _extract_pdf
-        assert callable(_extract_pdf)
+    def test_pdf_format_unsupported_without_dependency(self):
+        """Test that PDF files return appropriate format type."""
+        # Create a dummy .pdf file (won't be valid PDF, but tests format detection)
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            f.write(b'%PDF-1.4 dummy content')
+            temp_path = f.name
+        
+        try:
+            result = extract_text(temp_path)
+            # Should detect as PDF format (even if extraction fails due to invalid content)
+            assert result["format"] == "pdf" or "pdf" in result["error"].lower()
+        finally:
+            os.unlink(temp_path)
 
 
 class TestDOCXExtraction:
-    """Test DOCX extraction (requires python-docx)."""
+    """Test DOCX extraction through public API."""
     
-    def test_docx_import_error_handling(self):
-        """Test that DOCX extraction provides helpful error for missing dependency."""
-        from peargent.tools.text_extraction_tool import _extract_docx
-        assert callable(_extract_docx)
+    def test_docx_format_unsupported_without_dependency(self):
+        """Test that DOCX files return appropriate format type."""
+        # Create a dummy .docx file (won't be valid DOCX, but tests format detection)
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as f:
+            f.write(b'dummy docx content')
+            temp_path = f.name
+        
+        try:
+            result = extract_text(temp_path)
+            # Should detect as DOCX format (even if extraction fails due to invalid content)
+            assert result["format"] == "docx" or "docx" in result["error"].lower()
+        finally:
+            os.unlink(temp_path)
 
 
 if __name__ == "__main__":

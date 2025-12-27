@@ -43,7 +43,7 @@ def main():
         f.write(sample_html)
     
     # Extract text
-    result = extractor.call_function("sample.html")
+    result = extractor.run({"file_path": "sample.html"})
     
     if result["success"]:
         print(f"Format: {result['format']}")
@@ -55,7 +55,7 @@ def main():
     print("\n\n2. Extracting text with metadata:")
     print("-" * 60)
     
-    result = extractor.call_function("sample.html", extract_metadata=True)
+    result = extractor.run({"file_path": "sample.html", "extract_metadata": True})
     
     if result["success"]:
         print(f"Format: {result['format']}")
@@ -87,7 +87,7 @@ def main():
         print(f"Note: Agent requires API key. Skipping agent demo.")
         print("Set GROQ_API_KEY in your .env file to run this example.")
         print("\nDirect extraction works without API key:")
-        result = extractor.call_function("sample.html")
+        result = extractor.run({"file_path": "sample.html"})
         if result["success"]:
             print(f"Text: {result['text'][:150]}...")
     
