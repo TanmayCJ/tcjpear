@@ -166,7 +166,7 @@ def agent_integration_demo():
         print(f"\n Note: Agent requires API key. Skipping agent demo.")
         print("Set GROQ_API_KEY in your .env file to run agent integration.")
         print("\nDirect extraction works without API key:")
-        result = extractor.call_function("ai_overview.html")
+        result = extractor.run({"file_path": "ai_overview.html"})
         if result["success"]:
             print(f"\n{result['text']}")
 
