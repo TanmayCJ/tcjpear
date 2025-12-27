@@ -249,7 +249,7 @@ class TestErrorHandling:
 
 
 class TestPDFExtraction:
-    """Test PDF extraction (requires PyPDF2)."""
+    """Test PDF extraction (requires pypdf)."""
     
     def test_pdf_import_error_handling(self):
         """Test that PDF extraction provides helpful error for missing dependency."""

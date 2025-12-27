@@ -168,18 +168,18 @@ def _extract_html(file_path: str, extract_metadata: bool) -> tuple[str, Dict[str
 def _extract_pdf(file_path: str, extract_metadata: bool) -> tuple[str, Dict[str, Any]]:
     """Extract text from PDF file."""
     try:
-        import PyPDF2  # type: ignore
+        from pypdf import PdfReader  # type: ignore
     except ImportError:
         raise ImportError(
-            "PyPDF2 is required for PDF extraction. "
-            "Install it with: pip install PyPDF2"
+            "pypdf is required for PDF extraction. "
+            "Install it with: pip install pypdf>=6.0.0 or pip install peargent[text-extraction]"
         )
     
     text_parts = []
     metadata = {}
     
     with open(file_path, 'rb') as f:
-        reader = PyPDF2.PdfReader(f)
+        reader = PdfReader(f)
         
         # Extract metadata
         if extract_metadata:
