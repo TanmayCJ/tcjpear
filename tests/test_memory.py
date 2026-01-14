@@ -51,7 +51,7 @@ class TestLongTermMemory:
         id3 = ltm.store("User lives in NYC")
         
         assert ltm.count() == 3
-        assert id1 != id2 != id3
+        assert len(set([id1, id2, id3])) == 3  # All IDs are unique
 
     def test_retrieve_memories(self) -> None:
         """Test retrieving memories by semantic search."""

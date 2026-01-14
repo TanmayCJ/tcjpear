@@ -66,10 +66,11 @@ class InMemoryVectorStore(VectorStore):
             if memory.embedding:
                 mem_vec = np.array(memory.embedding)
                 # Cosine similarity
-                similarity = np.dot(query_vec, mem_vec) / (
-                    np.linalg.norm(query_vec) * np.linalg.norm(mem_vec)
-                )
-                scores.append((similarity, memory))
+                query_norm = np.linalg.norm(query_vec)
+                mem_norm = np.linalg.norm(mem_vec)
+                if query_norm > 0 and mem_norm > 0:
+                    similarity = np.dot(query_vec, mem_vec) / (query_norm * mem_norm)
+                    scores.append((similarity, memory))
         
         # Sort by similarity (highest first)
         scores.sort(reverse=True, key=lambda x: x[0])

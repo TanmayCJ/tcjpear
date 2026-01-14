@@ -587,6 +587,10 @@ class Agent:
                 tracer.end_trace(trace.trace_id, error=e)
 
             raise e
+        finally:
+            # Extract facts even if there was an error (partial conversation still valuable)
+            if not hasattr(self, '_exception_raised'):
+                self._extract_facts_to_long_term_memory()
 
     def stream(self, input_data: str):
         """
